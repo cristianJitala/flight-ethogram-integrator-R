@@ -1,0 +1,153 @@
+---
+title:  "Integrated Marine Data Protocol"
+author: "`r params$autor`"
+date:   "2025-07-14"
+output: html_document
+params:
+  autor: "Ing. Cristian Jitala, M.Sc. - Charles Darwin Foundation"
+  email: "cristian.jitala@gmail.com"
+---
+
+##### Contact e-mail: `r params$email`
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Install libraries
+```{r}
+# install.packages("dplyr")
+# install.packages("readxl")
+# install.packages("lubridate")
+# install.packages("tidyr")
+# install.packages("leaflet")
+
+```
+
+## Load libraries
+
+```{r, echo = TRUE, results = "hide"}
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(leaflet)
+```
+
+Set working directory to source file location
+
+```{r}
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
+```
+
+## Load all data
+
+-   Boris Records : Boris records are consolidated and retain all original columns.
+-   Drone FlightLogs: The Flight logbook is an Excel matrix that stores the daily flight records; it also includes climatological information.
+-   Flight Logbook: The flight logs are consolidated and include the required columns: “datetime (local),” “latitude,” and “longitude.”
+
+```{r, warning = FALSE}
+boris_behavior <- read.csv("data/boris_behavior/boris.csv")
+
+environmental_conditions_records <- read_excel("data/environmental_conditions/environmental_conditions.xlsx", sheet = "Sheet1")
+
+flight_logs <- read.csv("data/flight_logs/flightlogs.csv")
+```
+
+## Merging boris_behavior with environmental_conditions_records
+
+Extracts the video start time for each behavior recording from the daily flight log.
+
+Generates a key column, "Video_fileName" for the Mergin
+
+```{r}
+boris_behavior <- boris_behavior %>% mutate(
+  Video_fileName = if_else(Media.file.name == "Not found", basename(Source), basename(Media.file.name)) 
+  )
+
+```
+
+Gets the start time of each video
+
+```{r}
+join_boris_environmental <- boris_behavior %>% left_join(environmental_conditions_records, by = c("Video_fileName"="VIDEO"))
+```
+
+## Compute the Observation Time of the Occurrence in this format "YYYY-MM-DD hh:mm:ss"
+
+Sum of the time (seconds) plus the start time of each Video
+
+```{r}
+join_boris_environmental <- join_boris_environmental %>% mutate(
+  time_observation = as.character(format(`HORA LLEGADA PUNTO 1 Corr` + Time, "%Y-%m-%d %H:%M:%S")))
+  
+```
+
+## Mergin boris_environmental with flight_logs
+
+Filtered to retain distinct entries from flight_logs
+
+```{r}
+flight_logs_Distinct <- flight_logs %>%
+  # mutate(datetime.local. = as.POSIXct(datetime.local., for))
+  mutate(datetime.local. = format(as.POSIXct(datetime.local., format = "%m/%d/%Y %H:%M:%S"), "%Y-%m-%d %H:%M:%S")) %>%
+  group_by(datetime.local.) %>%            
+  summarise(latitude  = mean(latitude),
+            longitude = mean(longitude))                 
+```
+
+Gets the location with the observation time
+
+```{r}
+join_boris_environmental_flightlogs <- join_boris_environmental %>% left_join(flight_logs_Distinct, by = c("time_observation" = "datetime.local."))
+
+join_boris_environmental_flightlogs <- join_boris_environmental_flightlogs %>% filter(!is.na(latitude))
+```
+
+## Final Outputs
+
+Fully integrated dataset
+
+```{r}
+result_completed <- join_boris_environmental_flightlogs
+write.csv(result_completed, "output/result_completed.csv")
+```
+
+Summary integrated dataset
+
+```{r}
+result_summary <- join_boris_environmental_flightlogs %>% select(organism = Behavior, time_observation,latitude, longitude)
+write.csv(result_summary, "output/result_summary.csv")
+```
+
+## Plot - Spatial visualization of observations
+
+```{r} 
+library(leaflet)
+library(dplyr)
+
+pal <- colorFactor(palette = "Set1", domain = result_summary$organism)
+
+leaflet(result_summary) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    lng = ~longitude,
+    lat = ~latitude,
+    color = ~pal(organism),
+    radius = 6,
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = ~paste0("<b>", organism, "</b>")
+  ) %>%
+  addLegend("bottomright",
+            pal = pal,
+            values = ~organism,
+            title = "Organisms",
+            opacity = 1) %>%
+  addControl(
+    html = "<h3>Spatial Distribution of Observation Points</h3>",
+    position = "topright"
+  )
+
+```

@@ -5,12 +5,14 @@
 # Session Data files
 .RData
 .RDataTmp
+.RDataTmp1
+.RDataTmp2
 
 # User-specific files
 .Ruserdata
 
 # Example code in package build process
-*-Ex.R
+#*-Ex.R
 
 # Output files from R CMD build
 /*.tar.gz
@@ -20,6 +22,7 @@
 
 # RStudio files
 .Rproj.user/
+# .Rproj
 
 # produced vignettes
 vignettes/*.html
@@ -40,7 +43,7 @@ vignettes/*.pdf
 .Renviron
 
 # pkgdown site
-docs/
+# docs/
 
 # translation temp files
 po/*~
